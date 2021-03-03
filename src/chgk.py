@@ -2,6 +2,7 @@ from abc import ABCMeta, abstractmethod
 from typing import Tuple, List
 import re
 import random
+import math
 import logging
 from html import unescape as html_unescape
 
@@ -53,7 +54,7 @@ class QuestionStorage:
     async def find(self, content: str, page: int, page_size: int) -> Tuple[int, List[str]]:
         """Поиск вопросов по контенту
         
-        Возвращает колличество найденных вопросов и список идентификаторов
+        Возвращает колличество страниц и список идентификаторов на запрошенной странице
         """
 
 
@@ -84,11 +85,12 @@ class DummyQuestionStorage(QuestionStorage):
         return DummyQuestion(id, 'question' + id, 'answer' + id)
 
     async def find(self, content: str, page: int, page_size: int) -> Tuple[int, List[str]]:
+        pages_total = math.ceil(self._total / page_size)
         start = page * page_size
         end = start + page_size
         if end > self._total:
             end = self._total
-        return self._total, [str(i) for i in range(start, end)]
+        return pages_total, [str(i) for i in range(start, end)]
 
 
 class CHGKQuestion(Question):
@@ -120,8 +122,6 @@ class CHGKQuestion(Question):
 
 class CHGKQuestionStorage(QuestionStorage):
     async def find(self, content: str, page: int, page_size: int) -> Tuple[int, List[str]]:
-        assert page_size < 1000, "Maximum page value - 999"
-
         async with aiohttp.ClientSession() as session:
             url = f'https://db.chgk.info/search/questions/{content}/types123/limit{page_size}?page={page}'
             async with session.get(url) as response:
@@ -131,10 +131,13 @@ class CHGKQuestionStorage(QuestionStorage):
     def parse_result(self, content):
         tree = html.fromstring(content)
         elems = tree.xpath('//h2[@class="title"]/text()')[1]
-        total = re.findall(r'\d+', elems)
+
+        pages_total = tree.xpath('//li[@class="pager-last last"]/a/@href')[0]
+        pages_total = re.search(r'page\=(\d+)', pages_total).group(1)
+        pages_total = int(pages_total)
 
         elems = tree.xpath('//dl[@class="search-results questions-results"]//dd/div[@class="question"]//strong[@class="Question"]//a/@href')
-        return int(total[0]), list(map(lambda x: x.replace('/question/', ''), elems))
+        return pages_total, list(map(lambda x: x.replace('/question/', ''), elems))
 
     async def get_by_id(self, id: str) -> Question:
         async with aiohttp.ClientSession() as session:
@@ -180,9 +183,9 @@ https://db.chgk.info/question/vse_puchk01_u/5
 но ссылка на него сразу же редиректит на целый тур. Id тоже меняется.
 Итого нет связи 1 к 1 между найденным вопросом и тем, что доступно по ссылке.
 Именно поэтому существует этот вынужденный костыль:
-при создании квиза будет выполнена попытка загрузки и парсинга всех выбранных вопросов - неудачники будут выброшены.
+при создании квиза будет выполнена попытка загрузки и парсинга всех выбранных вопросов - проблемные будут выброшены.
 
-TODO оптимизация
+Также total (количество найденных вопросов) либо не соответствует действительности, либо выводят не равномерное их количество.
 '''
 async def get_n_random_questions(qs: QuestionStorage, tag: str, count: int) -> List[str]:
     total, _ = await qs.find(tag, 0, 1)

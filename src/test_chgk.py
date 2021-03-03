@@ -20,9 +20,9 @@ def async_test(coro):
 async def test_dummy_find():
     TOTAL = 9
     qstorage = DummyQuestionStorage(TOTAL)
-    total, questions_ids = await qstorage.find('test', 0, TOTAL + 1)
-    assert TOTAL == total, 'wrong total number'
-    assert total == len(questions_ids)
+    pages_total, questions_ids = await qstorage.find('test', 0, TOTAL + 1)
+    assert pages_total == 1, 'wrong pages_total number'
+    assert TOTAL == len(questions_ids)
     for i, id in enumerate(questions_ids):
         assert id == str(i)
 
@@ -43,10 +43,10 @@ async def test_chgk_find():
     page_size = 4
     qs = CHGKQuestionStorage()
     quest = await qs.find(content, page, page_size)
-    total = 5150
+    pages_total = 249
     id_list = ['leti08.4/4', 'rubr08st/154', 'ukrbr07.7/3', 'uzbek17.4/10']
     assert quest[1] == id_list
-    assert quest[0] == total
+    assert quest[0] == pages_total
 
 
 @async_test
