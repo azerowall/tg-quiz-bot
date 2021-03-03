@@ -56,12 +56,12 @@ class DummyQuestion(Question):
     
     def id(self) -> str:
         return self._id
-    def question(self) -> str:
+    def question_text(self) -> str:
         return self._question
-    def answer(self) -> str:
+    def answer_text(self) -> str:
         return self._answer
     def check_answer(self, answer: str) -> bool:
-        return self.answer() == answer
+        return self.answer_text() == answer
 
 class DummyQuestionStorage(QuestionStorage):
     def __init__(self, total):
@@ -75,5 +75,5 @@ class DummyQuestionStorage(QuestionStorage):
         end = start + page_size
         if end > self._total:
             end = self._total
-        return self._total, [await self.get_by_id(str(i)) for i in range(start, end)]
+        return self._total, [str(i) for i in range(start, end)]
 
