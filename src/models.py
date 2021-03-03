@@ -60,8 +60,7 @@ class QuizResult(Base):
         if total is None:
             total = len(self.questions_results)
         good = self.score / 100 * total
-        good += 1
-        self.set_score(good, total)
+        self.set_score(good + 1, total)
 
     def all_answers_right(self):
         return self.score == 100

@@ -61,7 +61,7 @@ class QuizResultActions:
 QUIZ_RESULT_MANUAL_CHECK_CD = CallbackData('quiz_manual_check', 'quiz_result_id', 'wrong_answer_number', 'action')
 class ManualCheckActions:
     INITIAL = 0
-    APPROVE = 1
+    ACCEPT = 1
     REJECT = 2
 
 
@@ -335,7 +335,7 @@ def repo_set_answer(session: Session, quiz_result_id: int, question_id: int, ans
         session.add(question_result)
 
 
-def repo_approve_answer(session: Session, quiz_result: QuizResult, question_result: QuestionResult):
+def repo_accept_answer(session: Session, quiz_result: QuizResult, question_result: QuestionResult):
     if question_result.result:
         return
     question_result.result = True
@@ -436,41 +436,55 @@ async def run_quiz_iteration(message: types.Message, state: FSMContext):
 
 
 @dp.callback_query_handler(QUIZ_RESULT_MANUAL_CHECK_CD.filter())
-async def manual_check_iteration(query: types.CallbackQuery, callback_data: dict):
+async def manual_check_iteration(query: types.CallbackQuery, state: FSMContext, callback_data: dict):
     quiz_result_id = int(callback_data['quiz_result_id'])
     qnum = int(callback_data['wrong_answer_number'])
-    action = int(callback_data['action'])
+    accept_result = int(callback_data['action'])
+    has_accept_result = qnum > 0
     
     await query.answer(f'manual check {qnum}')
 
-    has_wrong_answer = 0
-    has_approve_resilt = qnum > 0
-
     with session_scope() as session:
-        question_result = session.query(QuestionResult)\
-            .filter_by(quiz_result_id=quiz_result_id, result=False).offset(qnum).first()
-        question = question_result.question
-    ext_id = question.ext_id
-    chgk_question = await question_storage.get_by_id(ext_id)
+        sqlq = session.query(QuestionResult)\
+            .filter_by(quiz_result_id=quiz_result_id, result=False)
+        
+        question_result = sqlq.offset(qnum).first()
 
-    text = (
-        "Question:\n"
-        f"`{chgk_question.question_text()}`\n"
-        "Right answer:\n"
-        f"`{chgk_question.answer_text()}`\n"
-        "User answer:\n"
-        f"`{question_result.text}`"
-    )
+        if has_accept_result and accept_result == ManualCheckActions.ACCEPT:
+            quiz_result = session.query(QuizResult).get(quiz_result_id)
+            prev_question_result = sqlq.offset(qnum - 1).first()
+            repo_accept_answer(session, quiz_result, prev_question_result)
+            session.commit()
+        
+        if question_result is not None:
+            question = question_result.question
+            ext_id = question.ext_id
+            chgk_question = await question_storage.get_by_id(ext_id)
+            text = (
+                "Question:\n"
+                f"`{chgk_question.question_text()}`\n"
+                "Right answer:\n"
+                f"`{chgk_question.answer_text()}`\n"
+                "User answer:\n"
+                f"`{question_result.text}`"
+            )
 
-    kb = types.InlineKeyboardMarkup()
-    kb.add(
-        types.InlineKeyboardButton('𐄂', callback_data='nook'),
-        types.InlineKeyboardButton('🗸', callback_data='ok'),
-    )
-    kb.add( types.InlineKeyboardButton('Back',
-        callback_data=QUIZ_RESULT_CD.new(quiz_result_id, QuizResultActions.SHOW)) )
+            next_qnum = qnum if accept_result == ManualCheckActions.ACCEPT else qnum + 1
+            kb = types.InlineKeyboardMarkup()
+            kb.add(
+                types.InlineKeyboardButton('<',
+                    callback_data=QUIZ_RESULT_CD.new(quiz_result_id, QuizResultActions.SHOW)),
 
-    await query.message.edit_text(text, reply_markup=kb)
+                types.InlineKeyboardButton('𐄂',
+                    callback_data=QUIZ_RESULT_MANUAL_CHECK_CD.new(quiz_result_id, next_qnum, ManualCheckActions.REJECT)),
+                types.InlineKeyboardButton('🗸',
+                    callback_data=QUIZ_RESULT_MANUAL_CHECK_CD.new(quiz_result_id, next_qnum, ManualCheckActions.ACCEPT)),
+            )
+
+            await query.message.edit_text(text, reply_markup=kb)
+        else:
+            # finish
+            await query.message.edit_text("Done!")
 
 
 
