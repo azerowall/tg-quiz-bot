@@ -20,12 +20,11 @@ def async_test(coro):
 async def test_dummy_find():
     TOTAL = 9
     qstorage = DummyQuestionStorage(TOTAL)
-    total, questions = await qstorage.find('test', 0, TOTAL + 1)
+    total, questions_ids = await qstorage.find('test', 0, TOTAL + 1)
     assert TOTAL == total, 'wrong total number'
-    assert total == len(questions)
-    for i, quest in enumerate(questions):
-        assert quest.id() == str(i)
-
+    assert total == len(questions_ids)
+    for i, id in enumerate(questions_ids):
+        assert id == str(i)
 
 @async_test
 async def test_chgk_get_by_id():
