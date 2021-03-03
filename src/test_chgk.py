@@ -1,7 +1,7 @@
 import asyncio
 import string
 
-from chgk import DummyQuestionStorage, CHGKQuestionStorage
+from chgk import DummyQuestionStorage, CHGKQuestionStorage, CHGKQuestion
 
 
 # Простой вариант
@@ -50,7 +50,8 @@ async def test_chgk_find():
     assert quest[0] == total
 
 
-
 @async_test
 async def test_chgk_check_answer():
-    pass
+    qs = CHGKQuestion( id = '', question = '', answer = ' Синее   море. ', other_answer='12 обезьян.')
+    assert qs.check_answer('12 Обезьян')
+    assert qs.check_answer('Синее море')

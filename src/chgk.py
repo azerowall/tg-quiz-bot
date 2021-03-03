@@ -87,10 +87,11 @@ class DummyQuestionStorage(QuestionStorage):
 
 
 class CHGKQuestion(Question):
-    def __init__(self, id, question, answer):
+    def __init__(self, id, question, answer, other_answer = None):
         self._id = id
         self._question = question
         self._answer = answer
+        self._other_answer = other_answer
 
     def id(self) -> str:
         return self._id
@@ -102,9 +103,14 @@ class CHGKQuestion(Question):
         return self._answer
 
     def check_answer(self, answer: str) -> bool:
-        if answer == self._answer:
-            return True
-        return False
+        answer = self.normalize_string(answer)
+        return answer == self.normalize_string(self._answer) or answer == self.normalize_string(self._other_answer) \
+            if self._other_answer is not None else answer == self.normalize_string(self._answer)
+
+    @staticmethod
+    def normalize_string(s: str):
+        s = s.lower()
+        return re.findall(r'\w\d', s)
 
 
 class CHGKQuestionStorage(QuestionStorage):
