@@ -110,7 +110,7 @@ class CHGKQuestion(Question):
     @staticmethod
     def normalize_string(s: str):
         s = s.lower()
-        return re.findall(r'\w\d', s)
+        return re.findall(r'[\w\d]+', s, re.UNICODE)
 
 
 class CHGKQuestionStorage(QuestionStorage):

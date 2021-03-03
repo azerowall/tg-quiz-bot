@@ -55,3 +55,4 @@ async def test_chgk_check_answer():
     qs = CHGKQuestion( id = '', question = '', answer = ' Синее   море. ', other_answer='12 обезьян.')
     assert qs.check_answer('12 Обезьян')
     assert qs.check_answer('Синее море')
+    assert not qs.check_answer('п море')
