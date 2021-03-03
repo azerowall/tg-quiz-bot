@@ -1,7 +1,7 @@
 import asyncio
 import string
 
-from chgk import DummyQuestionStorage, CHGKQuestionStorage, CHGKQuestion
+from chgk import DummyQuestionStorage, CHGKQuestionStorage, CHGKQuestion, get_n_random_questions
 
 
 # Простой вариант
@@ -51,7 +51,29 @@ async def test_chgk_find():
 
 @async_test
 async def test_chgk_check_answer():
-    qs = CHGKQuestion( id = '', question = '', answer = ' Синее   море. ', other_answer='12 обезьян.')
-    assert qs.check_answer('12 Обезьян')
-    assert qs.check_answer('Синее море')
-    assert not qs.check_answer('п море')
+    q = CHGKQuestion( id = '', question = '', answer = ' Синее   море. ', other_answer='12 обезьян.')
+    assert q.check_answer('12 Обезьян')
+    assert q.check_answer('Синее море')
+    assert not q.check_answer('п море')
+
+
+@async_test
+async def test_chgk_razdatka():
+    id = 'leti11.5/5'
+    qs = CHGKQuestionStorage()
+    q = await qs.get_by_id(id)
+    
+    parts = [
+        'Италия — Amaretto', 'Англия — disease', 'Россия — юмореска',
+        'охарактеризовать слово справа названием известного европейского фильма 2004 года',
+    ]
+    for part in parts:
+        assert q.question_text().find(part) != -1, f"Part: '{part}'"
+    
+
+@async_test
+async def test_chgk_get_random():
+    qs = CHGKQuestionStorage()
+
+    links = await get_n_random_questions(qs, 'море', 10)
+    assert len(links) == 10

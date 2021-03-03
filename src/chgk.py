@@ -1,9 +1,16 @@
 from abc import ABCMeta, abstractmethod
 from typing import Tuple, List
+import re
+import random
+import logging
+from html import unescape as html_unescape
+
 import aiohttp
 import asyncio
-from lxml import html
-import re
+from lxml import etree, html
+
+
+logger = logging.getLogger(__name__)
 
 
 class Question:
@@ -113,6 +120,8 @@ class CHGKQuestion(Question):
 
 class CHGKQuestionStorage(QuestionStorage):
     async def find(self, content: str, page: int, page_size: int) -> Tuple[int, List[str]]:
+        assert page_size < 1000, "Maximum page value - 999"
+
         async with aiohttp.ClientSession() as session:
             url = f'https://db.chgk.info/search/questions/{content}/types123/limit{page_size}?page={page}'
             async with session.get(url) as response:
@@ -129,19 +138,71 @@ class CHGKQuestionStorage(QuestionStorage):
 
     async def get_by_id(self, id: str) -> Question:
         async with aiohttp.ClientSession() as session:
-            url = f'https://db.chgk.info/question/{id}'
+            url = f'https://db.chgk.info/question/{id}/xml'
             async with session.get(url) as response:
                 content = await response.text()
-                quest_res = self.parse_question(content)[0]
-                answer = self.parse_question(content)[1]
-                quest = CHGKQuestion(id, quest_res, answer)
-                return quest
-
-    def parse_question(self, content) -> Question:
-        tree = html.fromstring(content)
-        elems = tree.xpath('//p/text()')
-        return elems[1].replace('\n', ' ').strip(), elems[3].strip()
+                return self.parse_question(id, content)
 
 
+    def parse_question(self, id: str, content: str) -> Question:
+        question_elem = etree.fromstring(content)
+
+        question = question_elem.xpath('//Question/text()')[0]
+        answer = question_elem.xpath('//Answer/text()')[0]
+        answer = html_unescape(answer)
+        pass_criteria = question_elem.xpath('//PassCriteria')
+        if len(pass_criteria) > 0:
+            pass_criteria = pass_criteria[0].text
+            pass_criteria = html_unescape(pass_criteria)
+        else:
+            pass_criteria = None
+
+        question_elem = html.fromstring(question)
+        question = question_elem.xpath('text()')
+        question = ''.join(question).strip().replace('\n', ' ')
+
+        razdatka = question_elem.xpath('//div[@class="razdatka"]/text()')
+        if len(razdatka) > 0:
+            razdatka = ''.join(p.lstrip() for p in razdatka if not p.isspace())
+            question = (
+                "Раздаточный материал:\n"
+                f"{razdatka}\n"
+                f"{question}"
+            )
+
+        return CHGKQuestion(id, question, answer, pass_criteria)
 
 
+
+'''
+https://db.chgk.info/question/vse_puchk01_u/5
+Это вопрос, который нормально выводится в поиске,
+но ссылка на него сразу же редиректит на целый тур. Id тоже меняется.
+Итого нет связи 1 к 1 между найденным вопросом и тем, что доступно по ссылке.
+Именно поэтому существует этот вынужденный костыль:
+при создании квиза будет выполнена попытка загрузки и парсинга всех выбранных вопросов - неудачники будут выброшены.
+
+TODO оптимизация
+'''
+async def get_n_random_questions(qs: QuestionStorage, tag: str, count: int) -> List[str]:
+    total, _ = await qs.find(tag, 0, 1)
+
+    if total < count:
+        raise Exception(f"Found less questions than requested ({total} < {count})")
+
+    total = min(total, 999)
+
+    questions = set()
+    while len(questions) != count:
+        question_number = random.randint(0, total - 1)
+        _, ids = await qs.find(tag, question_number, 1)
+        assert len(ids) == 1
+        id = ids[0]
+
+        try:
+            question = await qs.get_by_id(id)
+        except Exception as e: # TODO?
+            logger.debug(f"Got exception on question '{id}' => try next question. Exception: {e}")
+        else:
+            questions.add(id)
+    return questions
