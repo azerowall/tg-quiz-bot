@@ -47,8 +47,14 @@ class QuizResult(Base):
 
     quiz = relationship('Quiz', backref='results')
 
+    def finished(self):
+        return self.end_time != None
+
+    def finished_query():
+        return QuizResult.end_time != None
+
     def set_score(self, good, total):
-        self.score = good // total * 100
+        self.score = good / total * 100
 
     def increment_score(self, total = None):
         if total is None:

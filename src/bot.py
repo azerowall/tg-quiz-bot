@@ -118,7 +118,7 @@ async def start(message: types.Message, state: FSMContext):
 
 
 
-@dp.message_handler(commands='cancel')
+@dp.message_handler(commands='cancel', state='*')
 async def cancel(message: types.Message, state: FSMContext):
     cur_state = await state.get_state()
     if cur_state is None:
@@ -229,11 +229,12 @@ async def quiz_actions(query: types.CallbackQuery, callback_data: dict):
     if action == QuizActions.SHOW:
         with session_scope() as session:
             quiz = session.query(Quiz).get(quiz_id)
-            results = quiz.results
+            results_count = session.query(QuizResult)\
+                .filter((QuizResult.quiz_id == quiz_id) & QuizResult.finished_query()).count()
             text = (
                 f"Name: {quiz.name}\n"
                 f"Questions: {len(quiz.questions)}\n"
-                f"Results: {len(results)}\n"
+                f"Results: {results_count}\n"
                 f"Link: {get_quiz_link(quiz.id)}"
             )
         kb = types.InlineKeyboardMarkup()
@@ -259,7 +260,8 @@ async def quiz_results_list(query: types.CallbackQuery, callback_data: dict):
     await query.answer(page)
 
     with session_scope() as session:
-        sqlq = session.query(QuizResult).filter(QuizResult.quiz_id == quiz_id)
+        sqlq = session.query(QuizResult)\
+            .filter((QuizResult.quiz_id == quiz_id) & QuizResult.finished_query())
         total = sqlq.count()
         items = sqlq.offset(page * config.LIST_PAGE_SIZE).limit(config.LIST_PAGE_SIZE)
     
@@ -441,7 +443,34 @@ async def manual_check_iteration(query: types.CallbackQuery, callback_data: dict
     
     await query.answer(f'manual check {qnum}')
 
-    # TODO
+    has_wrong_answer = 0
+    has_approve_resilt = qnum > 0
+
+    with session_scope() as session:
+        question_result = session.query(QuestionResult)\
+            .filter_by(quiz_result_id=quiz_result_id, result=False).offset(qnum).first()
+        question = question_result.question
+    ext_id = question.ext_id
+    chgk_question = await question_storage.get_by_id(ext_id)
+
+    text = (
+        "Question:\n"
+        f"`{chgk_question.question_text()}`\n"
+        "Right answer:\n"
+        f"`{chgk_question.answer_text()}`\n"
+        "User answer:\n"
+        f"`{question_result.text}`"
+    )
+
+    kb = types.InlineKeyboardMarkup()
+    kb.add(
+        types.InlineKeyboardButton('𐄂', callback_data='nook'),
+        types.InlineKeyboardButton('🗸', callback_data='ok'),
+    )
+    kb.add( types.InlineKeyboardButton('Back',
+        callback_data=QUIZ_RESULT_CD.new(quiz_result_id, QuizResultActions.SHOW)) )
+
+    await query.message.edit_text(text, reply_markup=kb)
 
 
 
