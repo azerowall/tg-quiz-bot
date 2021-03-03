@@ -110,7 +110,7 @@ async def start(message: types.Message, state: FSMContext):
     else:
         kb = types.InlineKeyboardMarkup(row_width=1)
         kb.row(
-            types.InlineKeyboardButton('New', callback_data='newquiz'),
+            types.InlineKeyboardButton('New quiz', callback_data='newquiz'),
             types.InlineKeyboardButton('Quizzes', callback_data=QUIZZES_LIST_CD.new('0'))
         )
         await bot.send_message(message.from_user.id, "Hello, I'm quiz bot!", reply_markup=kb)
@@ -136,11 +136,21 @@ class CreateQuizStates(StatesGroup):
     tag = State()
     count = State()
 
+
 @dp.callback_query_handler(text="newquiz")
 async def new_quiz(query: types.CallbackQuery):
+    user_id = query.from_user.id
     await query.answer(query.data)
+
+    with session_scope() as session:
+        quizzes_count = session.query(Quiz).filter_by(user_id=user_id).count()
+    
+    if quizzes_count > config.MAX_QUIZ_PER_USER:
+        await bot.send_message(user_id, "The maximum number of tests has been reached.")
+        return
+
     await CreateQuizStates.name.set()
-    await bot.send_message(query.from_user.id, '1️⃣ Step one: The Name!')
+    await bot.send_message(user_id, '1️⃣ Step one: The Name!')
 
 @dp.message_handler(state=CreateQuizStates.name)
 async def new_quiz_process_name(message: types.Message, state: FSMContext):
@@ -156,10 +166,19 @@ async def new_quiz_process_tag(message: types.Message, state: FSMContext):
     await CreateQuizStates.next()
     await bot.send_message(message.from_user.id, '3️⃣ Step three: The Number! (... of questions, of course)')
 
-
 @dp.message_handler(state=CreateQuizStates.count)
 async def new_quiz_process_count(message: types.Message, state: FSMContext):
     user_id = message.from_user.id
+
+    try:
+        count = int(message.text)
+    except ValueError:
+        await bot.send_message(user_id, "I expected more from you (a number)")
+        return
+    
+    if count < 0 or config.MAX_QUESTIONS_IN_QUIZ < count:
+        await bot.send_message(user_id, f"Value out of range (0; {config.MAX_QUESTIONS_IN_QUIZ})")
+        return
 
     async with state.proxy() as data:
         name, tag, count = data['name'], data['tag'], int(message.text)
