@@ -292,7 +292,7 @@ async def quiz_results_list(query: types.CallbackQuery, callback_data: dict):
         user = await bot.get_chat_member(item.user_id, item.user_id)
         kb.add(
             types.InlineKeyboardButton(
-                f"@{user.user.username} - {item.score} ({item.end_time.date().strftime(config.DATE_FORMAT)})",
+                f"@{user.user.full_name} - {item.score} ({item.end_time.date().strftime(config.DATE_FORMAT)})",
                 callback_data=QUIZ_RESULT_CD.new(item.id, QuizResultActions.SHOW)) )
     
     kb.add( *make_pagination_buttons(lambda page: QUIZ_RESULTS_LIST_CD.new(quiz_id, page), page, total) )
@@ -324,7 +324,7 @@ async def quiz_result_actions(query: types.CallbackQuery, callback_data: dict):
             
             text = (
                 f"Quiz {quiz_result.quiz.name}\n"
-                f"User @{user.user.username}\n"
+                f"User @{user.user.full_name}\n"
                 f"Score {quiz_result.score}\n"
                 f"Time {quiz_result.end_time.strftime(config.DATETIME_FORMAT)}\n"
             )
