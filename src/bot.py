@@ -16,7 +16,7 @@ import config
 import chgk
 from models import Base, Quiz, Question, QuizResult, QuestionResult
 
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
 
 engine = create_engine(config.DATABASE_URL)
@@ -27,7 +27,8 @@ bot = Bot(token=config.API_TOKEN)
 dp = Dispatcher(bot, storage=MemoryStorage())
 
 
-question_storage = chgk.DummyQuestionStorage(100)
+#question_storage = chgk.DummyQuestionStorage(100)
+question_storage = chgk.CHGKQuestionStorage()
 
 
 
@@ -44,9 +45,7 @@ class session_scope:
             raise
 
 
-#QUIZZES_LIST_CBD = PrefixCallbackData('quizzes_list', 'page', type=int, default=0)
 QUIZZES_LIST_CD = CallbackData('quizzes', 'page')
-#QUIZ_CBD = PrefixCallbackData('quiz', 'quiz_id', type=int)
 QUIZ_CD = CallbackData('quiz', 'quiz_id', 'action')
 class QuizActions:
     SHOW = 0
@@ -160,19 +159,23 @@ async def new_quiz_process_tag(message: types.Message, state: FSMContext):
 
 @dp.message_handler(state=CreateQuizStates.count)
 async def new_quiz_process_count(message: types.Message, state: FSMContext):
+    user_id = message.from_user.id
+
     async with state.proxy() as data:
         name, tag, count = data['name'], data['tag'], int(message.text)
     await state.finish()
 
     with session_scope() as session:
-        total, chgk_questions_ids = await question_storage.find(tag, 0, count)
-        quiz = Quiz(message.from_user.id, name)
+        chgk_questions_ids = await chgk.get_n_random_questions(question_storage, tag, count)
+        logger.debug(f"User {user_id}, tag '{tag}', count {count}, ids {chgk_questions_ids}")
+
+        quiz = Quiz(user_id, name)
         for ext_id in chgk_questions_ids:
             quiz.questions.append(Question(quiz.id, ext_id))
         session.add(quiz)
         session.commit()
         link = get_quiz_link(quiz.id)
-        await bot.send_message(message.from_user.id, f"Done! Quiz: {link}")
+        await bot.send_message(user_id, f"Done! Quiz: {link}")
 
 
 
